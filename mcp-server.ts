@@ -32,7 +32,7 @@ server.tool(
   "Atualiza o status de uma tarefa",
   {
     id: z.string().describe("ID da tarefa"),
-    status: z.enum(["Pendentes", "Em Resolução", "Resolvidos"]).describe("Novo status")
+    status: z.enum(["Crítico", "Baixo", "Vencido", "Vencendo Breve", "Uso Vencendo"]).describe("Novo status")
   },
   async ({ id, status }) => {
     const updated = await updateTaskStatus(id, status);
