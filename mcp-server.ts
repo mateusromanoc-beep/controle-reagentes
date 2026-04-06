@@ -3,7 +3,7 @@ import cors from "cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
-import { addTask, getTasks, updateTaskStatus, upsertTasks, TipoAlerta } from "./src/lib/db";
+import { getTasks, updateTaskStatus, upsertTasks, StatusType } from "./src/lib/db";
 
 const app = express();
 app.use(cors());
@@ -25,22 +25,7 @@ server.tool(
   }
 );
 
-server.tool(
-  "add_task",
-  "Adiciona uma nova tarefa manualmente",
-  {
-    title: z.string().describe("Título da tarefa"),
-    description: z.string().describe("Descrição da tarefa").default(""),
-    status: z.enum(["Pendentes", "Em Resolução", "Resolvidos"]).describe("Status inicial da tarefa").default("Pendentes"),
-    priority: z.enum(["Baixa", "Média", "Alta"]).describe("Prioridade").default("Média")
-  },
-  async ({ title, description, status, priority }) => {
-    const newTask = await addTask({ title, description, status, priority, tipoAlerta: 'Geral' });
-    return {
-      content: [{ type: "text", text: `Tarefa adicionada com sucesso. ID: ${newTask.id}` }]
-    };
-  }
-);
+// add_task disabled due to schema migration
 
 server.tool(
   "update_task_status",
@@ -77,26 +62,23 @@ server.tool(
   async ({ criticos, baixos, vencidos, vencendo_breve, em_uso_vencendo }) => {
     const newTasks: any[] = [];
 
-    const parseEntry = (entryStr: string, tipoAlerta: TipoAlerta, priority: 'Baixa' | 'Média' | 'Alta') => {
-      // Ex: "159 | CAS: 50 | Fab: Dinamica | Lote: 123456 [EM USO] | Atual: 0 / Min: 1"
+    const parseEntry = (entryStr: string, status: StatusType) => {
       const idParts = entryStr.split(" | ");
       const rawId = idParts[0].trim().replace(/\s/g, "-");
       
       return {
-        id: `REA-${rawId}-${tipoAlerta.replace(/\s/g, "").toUpperCase()}`,
+        id: `REA-${rawId}-${Math.floor(Math.random()*1000)}`,
         title: `Reagente #${rawId}`,
-        description: entryStr.replace(`${idParts[0]} | `, ''), // remove o ID da descricao
-        status: "Pendentes",
-        priority,
-        tipoAlerta
+        description: entryStr.replace(`${idParts[0]} | `, ''),
+        status
       };
     };
 
-    criticos.forEach(e => newTasks.push(parseEntry(e, "Estoque Crítico", "Alta")));
-    vencidos.forEach(e => newTasks.push(parseEntry(e, "Vencido", "Alta")));
-    em_uso_vencendo.forEach(e => newTasks.push(parseEntry(e, "Uso Vencendo", "Alta")));
-    baixos.forEach(e => newTasks.push(parseEntry(e, "Estoque Baixo", "Média")));
-    vencendo_breve.forEach(e => newTasks.push(parseEntry(e, "Vencendo Breve", "Média")));
+    criticos.forEach(e => newTasks.push(parseEntry(e, "Crítico")));
+    vencidos.forEach(e => newTasks.push(parseEntry(e, "Vencido")));
+    em_uso_vencendo.forEach(e => newTasks.push(parseEntry(e, "Uso Vencendo")));
+    baixos.forEach(e => newTasks.push(parseEntry(e, "Baixo")));
+    vencendo_breve.forEach(e => newTasks.push(parseEntry(e, "Vencendo Breve")));
 
     await upsertTasks(newTasks);
 
