@@ -1,6 +1,6 @@
 import { createClient } from 'redis';
 
-export type StatusType = "Crítico" | "Baixo" | "Vencido" | "Vencendo Breve" | "Uso Vencendo" | "Descarte";
+export type StatusType = "Estoque" | "Crítico" | "Baixo" | "Vencido" | "Vencendo Breve" | "Uso Vencendo" | "Descarte";
 
 export interface Task {
   id: string;

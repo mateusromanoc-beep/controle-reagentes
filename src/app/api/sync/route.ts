@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     const vencidos = data.vencidos || [];
     const vencendo_breve = data.vencendo_breve || [];
     const em_uso_vencendo = data.em_uso_vencendo || [];
+    const estoque = data.estoque || [];
 
     const newTasks: any[] = [];
 
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       
       return {
         id: `REA-${rawId}-${Math.floor(Math.random()*1000)}`,
-        title: `Reagente #${rawId}`,
+        title: `Reagente #${idParts[0].trim()}`,
         description: entryStr.replace(`${idParts[0]} | `, ''),
         status
       };
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
     em_uso_vencendo.forEach((e: string) => newTasks.push(parseEntry(e, "Uso Vencendo")));
     baixos.forEach((e: string) => newTasks.push(parseEntry(e, "Baixo")));
     vencendo_breve.forEach((e: string) => newTasks.push(parseEntry(e, "Vencendo Breve")));
+    estoque.forEach((e: string) => newTasks.push(parseEntry(e, "Estoque")));
 
     // Subtitui tudo diariamente pelo mais atualizado do n8n / sheets
     await upsertTasks(newTasks);
