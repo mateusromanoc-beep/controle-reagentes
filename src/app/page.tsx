@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, AlertTriangle, Beaker, CalendarClock, Clock, LayoutGrid } from "lucide-react";
+import { AlertCircle, AlertTriangle, Beaker, CalendarClock, Clock, LayoutGrid, Search, Trash2 } from "lucide-react";
 import type { Task, StatusType } from "@/lib/db";
 
-const COLUMNS: StatusType[] = ["Crítico", "Baixo", "Vencido", "Vencendo Breve", "Uso Vencendo"];
+const COLUMNS: StatusType[] = ["Crítico", "Baixo", "Vencido", "Vencendo Breve", "Uso Vencendo", "Descarte"];
 
 export default function KanbanBoard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchTasks = async () => {
     try {
@@ -28,22 +29,33 @@ export default function KanbanBoard() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleDragStart = (e: React.DragEvent, id: string) => {
+  const handleDragStart = (e: React.DragEvent, id: string, title: string) => {
     e.dataTransfer.setData("taskId", id);
+    e.dataTransfer.setData("taskTitle", title);
   };
 
   const handleDrop = async (e: React.DragEvent, status: StatusType) => {
     const id = e.dataTransfer.getData("taskId");
+    const title = e.dataTransfer.getData("taskTitle");
+
     // Optimistic UI Update
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, status } : t))
     );
-    // API Update
-    await fetch("/api/tasks", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status }),
-    });
+
+    if (status === "Descarte") {
+      await fetch("/api/descarte", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, title }),
+      });
+    } else {
+      await fetch("/api/tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+    }
     fetchTasks();
   };
 
@@ -51,10 +63,16 @@ export default function KanbanBoard() {
     e.preventDefault();
   };
 
+  const filteredTasks = tasks.filter((t) => 
+    t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   const renderColumnHeader = (column: StatusType) => {
     switch (column) {
       case 'Crítico':
-        return <h3 className="font-semibold text-slate-200 flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-400" /> CRÍTICO</h3>;
+        return <h3 className="font-semibold text-slate-200 flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-500" /> CRÍTICO</h3>;
       case 'Baixo':
         return <h3 className="font-semibold text-slate-200 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-400" /> ESTOQUE BAIXO</h3>;
       case 'Vencido':
@@ -63,6 +81,8 @@ export default function KanbanBoard() {
         return <h3 className="font-semibold text-slate-200 flex items-center gap-2"><Clock className="w-5 h-5 text-blue-400" /> VENCE 30d</h3>;
       case 'Uso Vencendo':
         return <h3 className="font-semibold text-slate-200 flex items-center gap-2"><Beaker className="w-5 h-5 text-teal-400" /> EM USO</h3>;
+      case 'Descarte':
+        return <h3 className="font-semibold text-slate-200 flex items-center gap-2"><Trash2 className="w-5 h-5 text-red-600" /> DESCARTE</h3>;
     }
   }
 
@@ -73,6 +93,7 @@ export default function KanbanBoard() {
       case 'Vencido': return 'from-purple-500/10 to-transparent border-purple-500/30';
       case 'Vencendo Breve': return 'from-blue-500/10 to-transparent border-blue-500/30';
       case 'Uso Vencendo': return 'from-teal-500/10 to-transparent border-teal-500/30';
+      case 'Descarte': return 'from-red-900/20 to-transparent border-red-900/50 grayscale hover:grayscale-0';
     }
   }
 
@@ -80,19 +101,33 @@ export default function KanbanBoard() {
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 lg:p-8 font-sans selection:bg-purple-500/30 overflow-x-auto">
       <div className="w-max lg:w-full min-w-full mx-auto space-y-8">
         
-        <header className="flex flex-col md:flex-row md:items-end justify-between border-b border-slate-800 pb-6 gap-4 sticky left-0">
+        <header className="flex flex-col md:flex-row md:items-end justify-between border-b border-slate-800 pb-6 gap-6 sticky left-0 z-10 bg-slate-950/80 backdrop-blur-lg">
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-br from-indigo-400 to-purple-500 bg-clip-text text-transparent mb-2">
               Controle de Reagentes
             </h1>
-            <p className="text-slate-400 font-medium">Dashboard Analítico via n8n (Diário)</p>
+            <p className="text-slate-400 font-medium">Dashboard Analítico de Estoque</p>
           </div>
-          <div className="flex items-center gap-3 text-sm text-slate-400 bg-slate-900/50 px-4 py-2 rounded-full border border-slate-800/50 backdrop-blur-md">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </span>
-            Em sincronismo contínuo
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+            <div className="relative w-full sm:w-80 group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+              <input 
+                type="text" 
+                placeholder="Buscar reagente, lote ou ID..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-900/80 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+              />
+            </div>
+            
+            <div className="flex items-center gap-3 text-sm text-slate-400 bg-slate-900/50 px-4 py-2 rounded-full border border-slate-800/50 backdrop-blur-md shrink-0">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Sincronizado
+            </div>
           </div>
         </header>
 
@@ -107,19 +142,19 @@ export default function KanbanBoard() {
               <div className="flex items-center justify-between px-2">
                 {renderColumnHeader(column)}
                 <span className="bg-slate-800 text-slate-300 text-xs py-1 px-2.5 rounded-full font-medium shadow-inner">
-                  {tasks.filter((t) => t.status === column).length}
+                  {filteredTasks.filter((t) => t.status === column).length}
                 </span>
               </div>
 
               <div className="flex flex-col gap-3 min-h-[500px] p-3 rounded-2xl bg-slate-900/40 border border-slate-800/60 backdrop-blur-sm shadow-xl shadow-black/20">
-                {tasks
+                {filteredTasks
                   .filter((t) => t.status === column)
                   .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                   .map((task) => (
                     <div
                       key={task.id}
                       draggable
-                      onDragStart={(e) => handleDragStart(e, task.id)}
+                      onDragStart={(e) => handleDragStart(e, task.id, task.title)}
                       className={`group flex flex-col gap-3 cursor-grab active:cursor-grabbing p-4 rounded-xl bg-gradient-to-b ${renderCardColor(column)} bg-slate-800/80 hover:bg-slate-700/80 
                                  border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10`}
                     >
@@ -140,7 +175,7 @@ export default function KanbanBoard() {
                       )}
                     </div>
                   ))}
-                  {tasks.filter((t) => t.status === column).length === 0 && !loading && (
+                  {filteredTasks.filter((t) => t.status === column).length === 0 && !loading && (
                     <div className="flex flex-col items-center justify-center p-8 text-center border-2 border-dashed border-slate-800/80 rounded-xl m-2 opacity-50 bg-slate-900/20">
                       <LayoutGrid className="w-8 h-8 text-slate-600 mb-3" />
                       <p className="text-sm text-slate-500 font-medium">Nenhum evento</p>
